@@ -1,0 +1,37 @@
+{
+  "name": "mooremachine",
+  "version": "1.0.0",
+  "description": "Moore finite state machines",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "tape test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arekinath/node-mooremachine.git"
+  },
+  "author": "Joyent, Inc",
+  "contributors": [
+    {
+      "name": "Alex Wilson",
+      "email": "alex@cooperi.net"
+    }
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/arekinath/node-mooremachine/issues"
+  },
+  "engines": {
+    "node": ">=0.8.0"
+  },
+  "directories": {
+    "lib": "./lib"
+  },
+  "homepage": "https://github.com/arekinath/node-mooremachine#readme",
+  "dependencies": {
+    "assert-plus": ">=0.2.0 <0.3.0"
+  },
+  "devDependencies": {
+    "tape": ">=3.5.0 <4.0.0"
+  }
+}
