@@ -1,6 +1,6 @@
 {
   "name": "mooremachine",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Moore finite state machines",
   "main": "lib/index.js",
   "scripts": {
