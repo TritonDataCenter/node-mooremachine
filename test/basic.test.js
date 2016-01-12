@@ -24,3 +24,42 @@ test('enters initial state', function (t) {
 	t.strictEqual(c.getState(), 'initial');
 	t.end();
 });
+
+test('FSM.wrap', function (t) {
+	var fun = function (arg1, cb) {
+		setTimeout(function () {
+			cb(null, arg1);
+		}, 10);
+	};
+	var wrapped = FSM.wrap(fun);
+
+	var req = wrapped('foobar');
+	req.once('error', function (err) {
+		t.error(err);
+	});
+	req.once('return', function (val) {
+		t.strictEqual(val, 'foobar');
+		t.end();
+	});
+	req.run();
+});
+
+test('FSM.wrap error', function (t) {
+	var fun = function (arg1, cb) {
+		setTimeout(function () {
+			cb(new Error('hi'));
+		}, 10);
+	};
+	var wrapped = FSM.wrap(fun);
+
+	var req = wrapped('foobar');
+	req.once('error', function (err) {
+		t.ok(err);
+		t.strictEqual(err.message, 'hi');
+		t.end();
+	});
+	req.once('return', function (val) {
+		t.fail('should not return');
+	});
+	req.run();
+});
