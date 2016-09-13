@@ -157,6 +157,26 @@ Parameters:
    - `cb`: a Function, callback to run
  - `onState`: Function `(fsm, state, cb)`
 
+### `mod_mooremachine#validTransitions(possibleStates)`
+
+Should be called from a state entry function. Sets the list of valid transitions
+that are possible out of the current state. Any attempt to transition the FSM
+out of the current state to a state not on this list (using `gotoState()`) will
+throw an error.
+
+Parameters:
+ - `possibleStates`: Array of String, names of valid states
+
+### `mod_mooremachine#allStateEvent(name)`
+
+Adds an "all-state event". Should be called in the constructor for an FSM
+subclass. Any registered all-state event must have a handler registered on it
+after any state transition. This allows you to enforce that particular events
+must be handled in every state of the FSM.
+
+Parameters:
+ - `name`: String, name of the event
+
 ### `mod_mooremachine#getState()`
 
 Returns a String, full current state of the FSM (including sub-state).
