@@ -3,6 +3,7 @@
 var FSM = require('../lib/fsm');
 var test = require('tape').test;
 var util = require('util');
+var EventEmitter = require('events').EventEmitter;
 
 test('enters initial state', function (t) {
 	var inited;
@@ -11,11 +12,10 @@ test('enters initial state', function (t) {
 		FSM.call(this, 'initial');
 	};
 	util.inherits(Class, FSM);
-	Class.prototype.state_initial = function (on, once, timeout, onState) {
-		t.strictEqual(typeof (on), 'function');
-		t.strictEqual(typeof (once), 'function');
-		t.strictEqual(typeof (timeout), 'function');
-		t.strictEqual(typeof (onState), 'function');
+	Class.prototype.state_initial = function (S) {
+		t.strictEqual(typeof (S.on), 'function');
+		t.strictEqual(typeof (S.timeout), 'function');
+		t.strictEqual(typeof (S.gotoState), 'function');
 		inited = true;
 	};
 
@@ -25,41 +25,80 @@ test('enters initial state', function (t) {
 	t.end();
 });
 
-test('FSM.wrap', function (t) {
-	var fun = function (arg1, cb) {
-		setTimeout(function () {
-			cb(null, arg1);
-		}, 10);
-	};
-	var wrapped = FSM.wrap(fun);
+test('S.on works, emits stateChanged', function (t) {
+	var e = new EventEmitter();
 
-	var req = wrapped('foobar');
-	req.once('error', function (err) {
-		t.error(err);
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		S.on(e, 'foo', function () {
+			S.gotoState('notnext');
+		});
+		S.immediate(function () {
+			S.gotoState('next');
+		});
+	};
+	Class.prototype.state_next = function (S) {
+		S.validTransitions([]);
+	};
+
+	var c = new Class();
+	var history = [];
+	c.on('stateChanged', function (st) {
+		history.push(st);
 	});
-	req.once('return', function (val) {
-		t.strictEqual(val, 'foobar');
+	t.ok(c.isInState('initial'));
+	t.strictEqual(e.listeners('foo').length, 1);
+	setImmediate(function () {
+		t.ok(c.isInState('next'));
+		t.strictEqual(e.listeners('foo').length, 0);
+		t.deepEqual(history, ['initial', 'next']);
 		t.end();
 	});
-	req.run();
 });
 
-test('FSM.wrap error', function (t) {
-	var fun = function (arg1, cb) {
-		setTimeout(function () {
-			cb(new Error('hi'));
-		}, 10);
-	};
-	var wrapped = FSM.wrap(fun);
+test('double transition', function (t) {
+	var e = new EventEmitter();
 
-	var req = wrapped('foobar');
-	req.once('error', function (err) {
-		t.ok(err);
-		t.strictEqual(err.message, 'hi');
-		t.end();
+	var err;
+
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		e.on('foo', function () {
+			try {
+				S.gotoState('next');
+			} catch (ex) {
+				err = ex;
+			}
+		});
+	};
+	Class.prototype.state_next = function (S) {
+		S.validTransitions([]);
+	};
+
+	var c = new Class();
+	var history = [];
+	c.on('stateChanged', function (st) {
+		history.push(st);
 	});
-	req.once('return', function (val) {
-		t.fail('should not return');
+	t.ok(c.isInState('initial'));
+	t.strictEqual(e.listeners('foo').length, 1);
+	setImmediate(function () {
+		t.ok(c.isInState('initial'));
+		e.emit('foo');
+		e.emit('foo');
+		setImmediate(function () {
+			t.ok(c.isInState('next'));
+			t.strictEqual(e.listeners('foo').length, 1);
+			t.deepEqual(history, ['initial', 'next']);
+			t.ok(err);
+			t.ok(err.message.match(/already used/i));
+			t.end();
+		});
 	});
-	req.run();
 });
