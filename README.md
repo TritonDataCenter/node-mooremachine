@@ -78,26 +78,25 @@ function ThingFSM() {
 }
 mod_util.inherits(ThingFSM, mod_mooremachine.FSM);
 
-ThingFSM.prototype.state_stopped = function (on) {
-    var self = this;
-    on(this, 'startAsserted', function () {
-        self.gotoState('connecting');
+ThingFSM.prototype.state_stopped = function (S) {
+    S.on(this, 'startAsserted', function () {
+        S.gotoState('connecting');
     });
 };
 
-ThingFSM.prototype.state_connecting = function (on) {
+ThingFSM.prototype.state_connecting = function (S) {
     var self = this;
     this.tf_sock = mod_net.connect(...);
-    on(this.tf_sock, 'connect', function () {
-        self.gotoState('connected');
+    S.on(this.tf_sock, 'connect', function () {
+        S.gotoState('connected');
     });
-    on(this.tf_sock, 'error', function (err) {
+    S.on(this.tf_sock, 'error', function (err) {
         self.tf_lastError = err;
-        self.gotoState('error');
+        S.gotoState('error');
     });
 };
 
-ThingFSM.prototype.state_error = function (on, once, timeout) {
+ThingFSM.prototype.state_error = function (S) {
     var self = this;
     if (this.tf_sock !== undefined)
         this.tf_sock.destroy();
@@ -105,8 +104,8 @@ ThingFSM.prototype.state_error = function (on, once, timeout) {
     /* Print an error, do something, check # of retries... */
 
     /* Retry the connection in 5 seconds */
-    timeout(5000, function () {
-        self.gotoState('connecting');
+    S.timeout(5000, function () {
+        S.gotoState('connecting');
     });
 };
 
@@ -132,42 +131,33 @@ Parameters:
  - `initialState`: String, name of the initial state the FSM will enter at
    startup
 
-### `mod_mooremachine#state_name(on, once, timeout, onState)`
+### `FSM#state_name(stateHandle)`
 
 State entry functions. These run exactly once, at entry to the new state. They
 should take any actions associated with the state and set up any callbacks that
 can cause transition out of it.
 
-The `on`, `once`, `timeout` and `onState` arguments are functions that should be
-used to set up events that can lead to a state transition. The `on` function is
-like `EventEmitter#on`, but any handlers set up with it will be automatically
-torn down as soon as the FSM leaves its current state. Similar for `once` and
-`timeout`. The `onState` function is used in place of calling
-`mod_mooremachine#onState` on another FSM.
+The `stateHandle` argument is a handle giving access to functions that should be
+used to set up events that can lead to a state transition. It provides
+replacements for `EventEmitter#on`, `setTimeout`, and other mechanisms for async
+event handling, which are automatically torn down as soon as the FSM leaves its
+current state. This prevents erroneous state transitions from a dangling
+callback left behind by a previous state.
+
+It is permissible to call `stateHandle.gotoState()` immediately within the
+`state_` function.
+
+Caution should be used when emitting events or making synchronous calls within a
+`state_` function -- if it is possible for the handler of the event or callee to
+call back into the FSM or emit an event itself that may cause the FSM to
+transition, then the results of this occurring synchronously within the state
+entry function may be undesirable. It is highly recommended to emit any events
+within a `setImmediate()` callback.
 
 Parameters:
- - `on`: Function `(emitter, event, cb)`, sets up an event callback like
-   `EventEmitter#on`. Parameters:
-   - `emitter`: an EventEmitter
-   - `event`: a String, name of the event
-   - `cb`: a Function, callback to run when the event happens
- - `once`: Function `(emitter, event, cb)`, like `on` but only runs once
- - `timeout`: Function `(timeout, cb)`, like `setTimeout()`. Parameters:
-   - `timeout`: Number, milliseconds until the callback runs
-   - `cb`: a Function, callback to run
- - `onState`: Function `(fsm, state, cb)`
+ - `stateHandle`, an Object, instance of `mod_mooremachine.FSMStateHandle`
 
-### `mod_mooremachine#validTransitions(possibleStates)`
-
-Should be called from a state entry function. Sets the list of valid transitions
-that are possible out of the current state. Any attempt to transition the FSM
-out of the current state to a state not on this list (using `gotoState()`) will
-throw an error.
-
-Parameters:
- - `possibleStates`: Array of String, names of valid states
-
-### `mod_mooremachine#allStateEvent(name)`
+### `FSM#allStateEvent(name)`
 
 Adds an "all-state event". Should be called in the constructor for an FSM
 subclass. Any registered all-state event must have a handler registered on it
@@ -177,11 +167,11 @@ must be handled in every state of the FSM.
 Parameters:
  - `name`: String, name of the event
 
-### `mod_mooremachine#getState()`
+### `FSM#getState()`
 
 Returns a String, full current state of the FSM (including sub-state).
 
-### `mod_mooremachine#isInState(state)`
+### `FSM#isInState(state)`
 
 Tests whether the FSM is in the given state, or any sub-state of it.
 
@@ -190,26 +180,44 @@ Parameters:
 
 Returns a Boolean.
 
-### `mod_mooremachine#onState(state, cb)`
+## State handles
 
-Runs a callback on the next time that the FSM enters a given state or any
-sub-state of it.
+### `FSMStateHandle#gotoState(state)`
+
+Transitions the FSM into the given new state. Can only be called once per state
+handle.
+
+### `FSMStateHandle#on(emitter, event, cb)`
+
+Works like `EventEmitter#on`: equivalent to `emitter.on(event, cb)` but
+registers the callback for removal as soon as the FSM moves out of the current
+state.
+
+### `FSMStateHandle#timeout(timeoutMs, cb)`
+
+Equivalent to `setTimeout(cb, timeoutMs)`, but registers the timer for clearing
+as soon as the FSM moves out of the current state.
+
+Returns: the timer handle.
+
+### `FSMStateHandle#interval(intervalMs, cb)`
+
+Equivalent to `setInterval(cb, intervalMs)`, but registers the timer for
+clearing as soon as the FSM moves out of the current state.
+
+### `FSMStateHandle#validTransitions(possibleStates)`
+
+Should be called from a state entry function. Sets the list of valid transitions
+that are possible out of the current state. Any attempt to transition the FSM
+out of the current state to a state not on this list (using `gotoState()`) will
+throw an error.
 
 Parameters:
- - `state`: String, state to test for
- - `cb`: Function `(newState)`
+ - `possibleStates`: Array of String, names of valid states
 
-### `mod_mooremachine#gotoState(state)`
+### `FSMStateHandle#gotoState(state)`
 
 Causes the FSM to enter the given new state.
 
 Parameters:
  - `state`: String, state to enter
-
-### `mod_mooremachine.FSM.wrap(fun)`
-
-Wraps a conventional node callback function up into an EventEmitter, to make
-life a little easier with `on()`.
-
-Parameters:
- - `fun`: Function `(cb)`
