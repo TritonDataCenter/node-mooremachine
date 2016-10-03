@@ -1,6 +1,21 @@
 mooremachine
 ============
 
+Short version
+-------------
+
+This is a framework for organising your async node.js code as Moore
+Finite State Machines. FSMs can be easier to reason about and debug than
+implicit state kept in callbacks and objects, leading to more correct code.
+
+License and contributing
+------------------------
+
+MPL v2.0
+
+Contributions should be made through Gerrit -- see
+[CONTRIBUTING.md](./CONTRIBUTING.md).
+
 Introduction
 -----------
 
