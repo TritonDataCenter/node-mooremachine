@@ -110,3 +110,150 @@ test('double transition', function (t) {
 		});
 	});
 });
+
+test('substates', function (t) {
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		S.on(this, 'foo', function () {
+			S.gotoState('next');
+		});
+		S.on(this, 'bar', function () {
+			S.gotoState('initial.sub1');
+		});
+	};
+	Class.prototype.state_initial.sub1 = function (S) {
+		S.on(this, 'foobar', function () {
+			S.gotoState('initial.sub2');
+		});
+	};
+	Class.prototype.state_initial.sub2 = function (S) {
+		S.on(this, 'baz', function () {
+			S.gotoState('initial.sub1');
+		});
+	};
+	Class.prototype.state_next = function (S) {
+		S.validTransitions([]);
+	};
+
+	var c = new Class();
+	var history = [];
+	c.on('stateChanged', function (st) {
+		history.push(st);
+	});
+	t.ok(c.isInState('initial'));
+	t.ok(!c.isInState('initial.sub1'));
+	t.ok(!c.isInState('initial.sub2'));
+	c.emit('bar');
+	t.ok(c.isInState('initial.sub1'));
+	t.strictEqual(c.listeners('foobar').length, 1);
+	t.strictEqual(c.listeners('foo').length, 1);
+	c.emit('foobar');
+	t.ok(c.isInState('initial.sub2'));
+	t.strictEqual(c.listeners('foobar').length, 0);
+	c.emit('foobar');
+	t.ok(c.isInState('initial.sub2'));
+	c.emit('baz');
+	t.ok(c.isInState('initial.sub1'));
+	c.emit('foobar');
+	c.emit('bar');
+	t.ok(c.isInState('initial.sub1'));
+	c.emit('foo');
+	t.ok(c.isInState('next'));
+
+	setImmediate(function () {
+		t.deepEqual(history, ['initial', 'initial.sub1',
+		    'initial.sub2', 'initial.sub1', 'initial.sub2',
+		    'initial.sub1', 'next']);
+		t.end();
+	});
+});
+
+/*
+ * Note that re-entry into the same state is legal, but discouraged. We keep
+ * the test here to verify that it works in the basic case, but making
+ * heavy use of it is usually a sign of a poorly considered state model.
+ */
+test('re-entry into same state', function (t) {
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		S.on(this, 'foo', function () {
+			S.gotoState('initial');
+		});
+	};
+
+	var c = new Class();
+	var history = [];
+	c.on('stateChanged', function (st) {
+		history.push(st);
+	});
+	t.ok(c.isInState('initial'));
+	c.emit('foo');
+	t.ok(c.isInState('initial'));
+	setImmediate(function () {
+		t.deepEqual(history, ['initial', 'initial']);
+		t.end();
+	});
+});
+
+test('re-entry to parent state', function (t) {
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		S.on(this, 'foo', function () {
+			S.gotoState('initial.sub1');
+		});
+	};
+	Class.prototype.state_initial.sub1 = function (S) {
+		S.on(this, 'bar', function () {
+			S.gotoState('initial');
+		});
+	};
+
+	var c = new Class();
+	var history = [];
+	c.on('stateChanged', function (st) {
+		history.push(st);
+	});
+	t.ok(c.isInState('initial'));
+	c.emit('foo');
+	c.emit('bar');
+	c.emit('foo');
+	c.emit('foo');
+	c.emit('bar');
+	t.ok(c.isInState('initial'));
+	t.strictEqual(c.listeners('foo').length, 1);
+	t.strictEqual(c.listeners('bar').length, 0);
+
+	setImmediate(function () {
+		t.deepEqual(history, ['initial', 'initial.sub1', 'initial',
+		    'initial.sub1', 'initial.sub1', 'initial']);
+		t.end();
+	});
+});
+
+test('too many dots in state name', function (t) {
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		S.on(this, 'foo', function () {
+			S.gotoState('initial.foo.bar');
+		});
+	};
+
+	var c = new Class();
+	t.ok(c.isInState('initial'));
+	t.throws(function () {
+		c.emit('foo');
+	});
+	t.end();
+});
