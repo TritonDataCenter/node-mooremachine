@@ -124,7 +124,7 @@ ThingFSM.prototype.state_error = function (S) {
     });
 };
 
-ThingFSM.prototype.state_connected = function (on) {
+ThingFSM.prototype.state_connected = function (S) {
     /* ... */
 };
 ```
@@ -215,6 +215,11 @@ as soon as the FSM moves out of the current state.
 
 Returns: the timer handle.
 
+### `FSMStateHandle#callback(cb)`
+
+Wraps an arbitrary callback function in such a way that calling it once the FSM
+has left the current state is a no-op.
+
 ### `FSMStateHandle#interval(intervalMs, cb)`
 
 Equivalent to `setInterval(cb, intervalMs)`, but registers the timer for
@@ -236,3 +241,48 @@ Causes the FSM to enter the given new state.
 
 Parameters:
  - `state`: String, state to enter
+
+## Sub-states
+
+It is possible to create a "sub-state" with mooremachine FSMs, which "inherits
+from" its parent state. For example:
+
+```js
+ThingFSM.prototype.state_connected = function (S) {
+    S.on(this.tf_sock, 'close', function () {
+        S.gotoState('closed');
+    });
+    if (workAvailable)
+        S.gotoState('connected.busy');
+    else
+        S.gotoState('connected.idle');
+};
+
+ThingFSM.prototype.state_connected.busy = function (S) {
+    this.tf_sock.ref();
+    /* ... */
+    S.on(this.tf_work, 'finished', function () {
+        S.gotoState('connected');
+    });
+};
+
+ThingFSM.prototype.state_connected.idle = function (S) {
+    this.tf_sock.unref();
+    S.on(this, 'workAvailable', function () {
+        S.gotoState('connected.busy');
+    });
+};
+```
+
+All event handlers that are set up in the `'connected'` state entry function are
+kept when entering `'connected.busy'` or `'connected.idle'`. When changing from
+`'connected.busy'` to `'connected.idle'`, the handlers set up in that sub-state
+are torn down, but those originating from `'connected'` are kept.
+
+While in a sub-state of `'connected'`, `fsm.isInState('connected')` will
+continue to evaluate to `true`. Separate `'stateChanged'` events will be emitted
+for each sub-state entered.
+
+Once a handle is used to transition to an unrelated state (e.g. `'closed'` in
+the example), all handlers are torn down (from both the parent state and
+sub-state) as usual before entering the new state.
