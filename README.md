@@ -286,3 +286,133 @@ for each sub-state entered.
 Once a handle is used to transition to an unrelated state (e.g. `'closed'` in
 the example), all handlers are torn down (from both the parent state and
 sub-state) as usual before entering the new state.
+
+DTrace support
+--------------
+
+Mooremachine has support for DTrace probes using `dtrace-provider` (and
+`libusdt`). The following probes are provided under the
+`moorefsm$pid` provider:
+
+ * `create-fsm(char *klass, char *id)` -- fired at the creation of a new FSM
+   instance. The `klass` argument contains the string name of the constructor
+   of the FSM sub-class. The `id` argument contains a short randomly generated
+   string that should be unique to this FSM as long as <~6M instances of this
+   class exist in the program (it consists of 64 random bits, base64-encoded,
+   so about a 1/1M chance of collision at 6M instances).
+ * `transition-start(char *klass, char *id, char *oldState, char *newState)` --
+   fired at the beginning of an FSM transitioning to a new state.
+ * `transition-end(char *klass, char *id, char *oldState, char *newState)` --
+   fired at the end of an FSM transitioning to a new state.
+
+For example:
+
+```
+dtrace -Zc 'node thingfsm.js' -n '
+    moorefsm$target:::transition-start
+    /copyinstr(arg0) == "ThingFSM"/
+    {
+        printf("%s => %s", copyinstr(arg2), copyinstr(arg3));
+    }'
+```
+
+When used on the `ThingFSM` above might output:
+
+```
+CPU     ID                    FUNCTION:NAME
+  4   8216 transition-start:transition-start undefined => stopped
+  4   8216 transition-start:transition-start stopped => connecting
+  4   8216 transition-start:transition-start connecting => error
+```
+
+This is will list all the transitions of `ThingFSM` instances.
+
+Another example (as a d-script file):
+
+```
+uint64_t timeIn[string];
+
+moorefsm$target:::transition-start
+/copyinstr(arg0) == "SocketMgrFSM" && copyinstr(arg2) != "undefined"/
+{
+    this->id = copyinstr(arg1);
+    this->state = copyinstr(arg2);
+    this->entryTime = timeIn[this->id];
+    this->exitTime = timestamp;
+    this->time = (this->exitTime - this->entryTime) / 1000000;
+    @timeInState[this->state] = quantize(this->time);
+}
+
+moorefsm$target:::transition-end
+/copyinstr(arg0) == "SocketMgrFSM"/
+{
+    this->id = copyinstr(arg1);
+    timeIn[this->id] = timestamp;
+}
+```
+
+This reports on the number of milliseconds spent in each state by
+all SocketMgrFSM instances in the process.
+
+The output from this could look like:
+
+```
+$ dtrace -Zc 'node test.js' -s script.d
+...
+  error
+           value  ------------- Distribution ------------- count
+              -1 |                                         0
+               0 |@@@@@@@@@@@@@@@@@@@@                     1
+               1 |                                         0
+               2 |@@@@@@@@@@@@@@@@@@@@                     1
+               4 |                                         0
+
+  backoff
+           value  ------------- Distribution ------------- count
+              -1 |                                         0
+               0 |@@@@@@@@@@@@@@@@@@@@                     1
+               1 |                                         0
+               2 |                                         0
+               4 |                                         0
+               8 |                                         0
+              16 |                                         0
+              32 |                                         0
+              64 |@@@@@@@@@@@@@@@@@@@@                     1
+             128 |                                         0
+
+  connected
+           value  ------------- Distribution ------------- count
+               2 |                                         0
+               4 |@@@@@@@@@@@                              2
+               8 |@@@@@@                                   1
+              16 |                                         0
+              32 |                                         0
+              64 |                                         0
+             128 |                                         0
+             256 |@@@@@@                                   1
+             512 |@@@@@@@@@@@@@@@@@                        3
+            1024 |                                         0
+
+  connecting
+           value  ------------- Distribution ------------- count
+              -1 |                                         0
+               0 |@@@@@@@@@@@@@@@@@@                       4
+               1 |@@@@                                     1
+               2 |                                         0
+               4 |                                         0
+               8 |                                         0
+              16 |                                         0
+              32 |                                         0
+              64 |@@@@                                     1
+             128 |                                         0
+             256 |@@@@                                     1
+             512 |@@@@                                     1
+            1024 |@@@@                                     1
+            2048 |                                         0
+```
+
+It's generally safe enough to use only the `id` of the FSM as a key in an
+associative array or aggregation in DTrace, even when tracing multiple
+processes. This only becomes a problem if you expect to have more than a few
+million FSMs running at the same time on a system (in which case you can scope
+it by pid and class as well as key).

@@ -1,6 +1,6 @@
 {
   "name": "mooremachine",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Moore finite state machines",
   "main": "lib/index.js",
   "scripts": {
@@ -30,6 +30,9 @@
   "homepage": "https://github.com/arekinath/node-mooremachine#readme",
   "dependencies": {
     "assert-plus": ">=0.2.0 <0.3.0"
+  },
+  "optionalDependencies": {
+    "dtrace-provider": "~0.8"
   },
   "devDependencies": {
     "tape": ">=3.5.0 <4.0.0"
