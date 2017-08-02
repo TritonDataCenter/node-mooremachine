@@ -494,8 +494,9 @@ test('interacting FSMs', function (t) {
 	t.ok(a.isInState('s1'));
 	t.ok(b.isInState('s1'));
 
-	t.deepEqual(a.fsm_history, ['s1', 's2', 's3', 's1']);
-	t.deepEqual(b.fsm_history, ['s1', 's2', 's3', 's1']);
+	function takeFirst(arr) { return (arr[0]); }
+	t.deepEqual(a.fsm_history.map(takeFirst), ['s1', 's2', 's3', 's1']);
+	t.deepEqual(b.fsm_history.map(takeFirst), ['s1', 's2', 's3', 's1']);
 
 	t.end();
 });
