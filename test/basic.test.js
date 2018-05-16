@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (c) 2016, Joyent, Inc.
+ * Copyright (c) 2018, Joyent, Inc.
  */
 
 var FSM = require('../lib/fsm');
@@ -499,4 +499,40 @@ test('interacting FSMs', function (t) {
 	t.deepEqual(b.fsm_history.map(takeFirst), ['s1', 's2', 's3', 's1']);
 
 	t.end();
+});
+
+test('invalid arguments throw', function (t) {
+	var Class = function () {
+		FSM.call(this, 'initial');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_initial = function (S) {
+		/*
+		 * The functions below should all throw when called with no
+		 * arguments
+		 */
+		var funcsToThrow = [
+			'immediate',
+			'interval',
+			'timeout',
+			'callback',
+			'on',
+			'gotoState'
+		];
+
+		funcsToThrow.forEach(function (funcName) {
+			t.equal(typeof (S[funcName]), 'function', util.format(
+			    'S.%s is a function', funcName));
+			t.throws(function () {
+				S[funcName]();
+			}, util.format('S.%s() throws with no arguments',
+			    funcName));
+		});
+
+		t.end();
+	};
+
+	var c = new Class();
+
+	t.ok(c, 'class created');
 });
