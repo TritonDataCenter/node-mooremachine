@@ -275,11 +275,40 @@ Parameters:
 
  - `state`: a String, name of state to transition into
 
+### `FSMStateHandle#gotoStateOn(emitter, event, state)`
+
+Transitions the FSM into the given new state when `emitter` emits `event`. The
+registered callback will be removed if the FSM moves out of the current state.
+This is convenient shorthand for writing:
+
+```js
+S.on(emitter, event, function () {
+    S.gotoState(state);
+});
+```
+
+### `FSMStateHandle#gotoStateTimeout(timeoutMs, state)`
+
+Transitions the FSM into the given new state after `timeoutMs` milliseconds
+have elapsed. The timer is cleared if the FSM moves out of the current state.
+This is convenient shorthand for writing:
+
+```js
+S.timeout(timeoutMs, function () {
+    S.gotoState(state);
+});
+```
+
 ### `FSMStateHandle#on(emitter, event, cb)`
 
 Works like `EventEmitter#on`: equivalent to `emitter.on(event, cb)` but
 registers the callback for removal as soon as the FSM moves out of the current
 state.
+
+### `FSMStateHandle#immediate(cb)`
+
+Equivalent to `setImmediate(cb)`, but registers the timer for clearing as soon
+as the FSM moves out of the current state.
 
 ### `FSMStateHandle#timeout(timeoutMs, cb)`
 

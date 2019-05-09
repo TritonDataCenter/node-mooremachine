@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (c) 2018, Joyent, Inc.
+ * Copyright (c) 2019, Joyent, Inc.
  */
 
 var FSM = require('../lib/fsm');
@@ -404,6 +404,37 @@ test('timeouts', function (t) {
 	}, 70);
 });
 
+test('state transition shorthand', function (t) {
+	var Class = function () {
+		FSM.call(this, 's1');
+	};
+	util.inherits(Class, FSM);
+	Class.prototype.state_s1 = function (S) {
+		S.gotoStateOn(this, 'foo', 's2');
+		S.gotoStateTimeout(50, 's3');
+	};
+	Class.prototype.state_s2 = function (S) {
+		S.gotoStateTimeout(50, 's1');
+	};
+	Class.prototype.state_s3 = function (S) {
+		S.gotoStateOn(this, 'foo', 's1');
+	};
+
+	var c = new Class();
+	t.ok(c.isInState('s1'));
+	c.emit('foo');
+	t.ok(c.isInState('s2'));
+
+	setTimeout(function () {
+		t.ok(c.isInState('s1'));
+
+		setTimeout(function () {
+			t.ok(c.isInState('s3'));
+			t.end();
+		}, 70);
+	}, 70);
+});
+
 test('all state events', function (t) {
 	var Class = function () {
 		this.allStateEvent('foo');
@@ -517,7 +548,9 @@ test('invalid arguments throw', function (t) {
 			'timeout',
 			'callback',
 			'on',
-			'gotoState'
+			'gotoState',
+			'gotoStateOn',
+			'gotoStateTimeout'
 		];
 
 		funcsToThrow.forEach(function (funcName) {
